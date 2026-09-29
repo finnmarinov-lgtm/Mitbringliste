@@ -80,8 +80,11 @@ export async function ferienLaden() {
     const alt = JSON.parse(localStorage.getItem(SCHLUESSEL) || 'null');
     if (alt && Date.now() - alt.zeit < 7 * 864e5 && alt.daten?.length) { ferien = alt.daten; return false; }
   } catch { /* egal */ }
+  // Die Schnittstelle liefert höchstens 1095 Tage auf einmal
   const heute = new Date();
-  const von = (heute.getFullYear() - 1) + '-01-01', bis = (heute.getFullYear() + 2) + '-12-31';
+  const vonTag = new Date(heute.getFullYear(), heute.getMonth() - 4, 1);
+  const bisTag = new Date(vonTag.getFullYear(), vonTag.getMonth(), vonTag.getDate() + 1090);
+  const von = iso(vonTag), bis = iso(bisTag);
   const url = art => `https://openholidaysapi.org/${art}?countryIsoCode=DE&subdivisionCode=DE-ST&languageIsoCode=DE&validFrom=${von}&validTo=${bis}`;
   try {
     const teile = await Promise.all(['SchoolHolidays', 'PublicHolidays'].map(async art => {
