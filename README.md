@@ -16,6 +16,7 @@ Web-App für das gemeinsame Frühstück am **ersten Mittwoch im Monat**: Jeder s
 | `js/termine.js` | Erster Mittwoch im Monat, Ferien und Feiertage Sachsen-Anhalt |
 | `js/api.js` | Verbindung zu Supabase, dazu der Demo-Modus |
 | `js/vorlage.js` | Startliste (Brötchen, Mett, Butter, Zwiebeln, Gewürze) |
+| `js/regeln.js` | Günstig-Regel: nach zweimal Günstigem ist man bei den teureren Sachen dran |
 | `supabase.sql` | Tabellen und Funktionen, im SQL-Editor ausführen (darf mehrmals laufen) |
 | `js/push.js`, `js/push-schluessel.js` | Gerät für Erinnerungen an- und abmelden, öffentlicher VAPID-Schlüssel |
 | `erinnerung/planen.js` | Wer wann erinnert wird |
@@ -26,12 +27,15 @@ Web-App für das gemeinsame Frühstück am **ersten Mittwoch im Monat**: Jeder s
 | `serve.js` | Testserver: `node serve.js`, dann http://localhost:4174/?demo |
 | `test/aufteilen.test.js` | Prüft die Aufteilung: `node test/aufteilen.test.js` |
 | `test/erinnerung.test.js` | Prüft die Erinnerungen: `TZ=Europe/Berlin node test/erinnerung.test.js` |
+| `test/regeln.test.js` | Prüft die Günstig-Regel: `node test/regeln.test.js` |
 
 ## So funktioniert es
 
 **Termine:** Grundsätzlich jeder erste Mittwoch im Monat. Ändern kann ihn nur die Moderation (verlegen, absagen, Hinweis). Fällt er in Ferien oder auf einen Feiertag, zeigt die App eine Warnung und schlägt der Moderation den nächsten freien Mittwoch vor. Ferien und Feiertage kommen von openholidaysapi.org, für 2026 bis 2028 sind sie zur Sicherheit in `termine.js` hinterlegt.
 
-**Aufteilen:** Jede Sache hat eine Menge pro Person (Brötchen 3, Mett 300 g), eine feste Menge (Butter 2 Blöcke), eine Schrittweite (Mett 50 g) und einen geschätzten Preis. Die App rechnet den Gesamtbedarf aus und sucht eine Aufteilung in genau so viele Posten, wie Leute dabei sind, mit möglichst gleichem Preis. Kleine Sachen landen gemeinsam in einem Posten (z. B. „1 Sack Zwiebeln + Gewürze“).
+**Aufteilen:** Jede Sache hat eine Menge pro Person (Brötchen 3, Mett 300 g), eine feste Menge (Butter 2 Blöcke), eine Schrittweite (Mett 50 g) und einen geschätzten Preis. Die App rechnet den Gesamtbedarf aus und sucht eine Aufteilung in genau so viele Posten, wie Leute dabei sind, mit möglichst gleichem Preis. Als „günstig“ markierte Sachen (Häkchen im Reiter Einkauf, nur für die Moderation; in der Startliste Zwiebeln und Gewürze) bekommen immer einen eigenen Posten, sobald mindestens so viele Leute dabei sind, wie es Sachen gibt. Bei kleineren Gruppen kommen sie zu teureren Sachen dazu, aber nie zwei günstige zusammen.
+
+**Günstig-Regel:** Wer bei seinen letzten zwei MMM, bei denen er dabei war, etwas Günstiges hatte (oder nichts), kann beim dritten Mal keinen günstigen Posten nehmen, solange noch etwas Teureres frei ist. „Übrige Posten zufällig verteilen“ gibt diesen Leuten zuerst etwas Teureres.
 
 **Wer bekommt was:** Gespeichert wird nur die Sorte, die jemand gewählt hat (z. B. `mett`), nicht die Menge. Wer zuerst gewählt hat, bekommt den ersten Posten seiner Sorte. Ändert sich die Zahl der Leute, passen sich die Mengen an, und wer betroffen ist, sieht „Geändert, vorher …“. Fällt eine Sorte ganz weg, muss sich der Letzte neu entscheiden.
 

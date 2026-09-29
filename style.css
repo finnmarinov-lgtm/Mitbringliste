@@ -278,6 +278,8 @@ textarea.feld { resize: vertical; }
 .felder .feld, .sache > .feld-label .feld { color: var(--text); }
 .sache-info { margin-top: 8px; }
 .preis-fuer { color: var(--akzent-dunkel); font-weight: 700; }
+.klein-pille { font-size: .7rem; padding: 1px 8px; vertical-align: 2px; font-weight: 700; }
+.abstand-klein { margin-top: 10px; }
 .vorschau-n { display: flex; align-items: center; gap: 6px; color: var(--leise); }
 .vorschau-liste { list-style: none; margin: 0 0 10px; padding: 0; }
 .vorschau-liste li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--rand); }

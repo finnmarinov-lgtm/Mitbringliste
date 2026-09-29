@@ -2,6 +2,7 @@
 import { aufteilen, zuordnen, bedarf, euro, teilText } from './aufteilen.js';
 import { termine, phase, freigabeZeit, erinnerungZeit, kurzDatum, WOCHENTAGE, MONATE, ausIso, iso, ferienLaden } from './termine.js';
 import { pushMoeglich, aboHolen, abonnieren } from './push.js';
+import { istGuenstig, guenstigGesperrt } from './regeln.js';
 import { macheApi, fehlerText, DEMO_CODES } from './api.js';
 import { VORLAGE, EINSTELLUNGEN } from './vorlage.js';
 
@@ -134,7 +135,12 @@ function lage() {
   const auf = aufteilen(d.sachen, dabei.length);
   const zu = zuordnen(auf.posten, dabei);
   const meine = antworten.find(a => a.person === S.ich) || null;
-  return { t, ph, antworten, dabei, auf, zu, meine, offen: ph === 'anmeldung' || ph === 'liste' };
+  // Günstig-Regel: nach zweimal Günstigem ist man bei den teureren Sachen dran (solange davon noch etwas frei ist)
+  const abgesagt = new Set(d.termine.filter(x => x.abgesagt).map(x => x.schluessel));
+  const gesperrt = id => guenstigGesperrt(id, t.schluessel, d.antworten, d.sachen, abgesagt);
+  const teuerFrei = auf.posten.some((p, i) => zu.belegt[i] === null && !istGuenstig(p.key, d.sachen));
+  const sperre = !!S.ich && teuerFrei && gesperrt(S.ich);
+  return { t, ph, antworten, dabei, auf, zu, meine, offen: ph === 'anmeldung' || ph === 'liste', gesperrt, sperre };
 }
 
 const personName = id => S.daten.personen.find(p => p.id === id)?.name || '?';
@@ -344,7 +350,10 @@ function aufgabeBlock(L) {
   if (zu.verloren.includes(S.ich)) {
     return `<div class="aufgabe leer warn">${ICON.info}<span>Dein Posten fällt weg, weil sich die Zahl der Leute geändert hat. Such dir bitte unten etwas Neues aus.</span></div>`;
   }
-  if (ph === 'liste') return `<div class="aufgabe leer">${ICON.runter}<span>Such dir unten in der Liste etwas aus.</span></div>`;
+  if (ph === 'liste') {
+    return `<div class="aufgabe leer">${ICON.runter}<span>Such dir unten in der Liste etwas aus.${L.sperre
+      ? ' Du hattest die letzten zwei Male etwas Günstiges, diesmal bist du bei den teureren Sachen dran.' : ''}</span></div>`;
+  }
   return '';
 }
 
@@ -390,22 +399,26 @@ function listeKarte(L) {
     if (freie.length) {
       const p = freie[0];
       const anzahl = freie.length > 1 ? `noch ${freie.length} frei` : 'frei';
-      const rechts = interaktiv && meinKey !== g.key
+      const gesperrt = L.sperre && istGuenstig(g.key, S.daten.sachen);
+      const rechts = interaktiv && meinKey !== g.key && !gesperrt
         ? `<button class="knopf klein" data-a="nehmen" data-key="${esc(g.key)}">Nehm ich</button>`
         : `<span class="frei">${anzahl}</span>`;
       zeilen.push(`<li class="ist-frei">
         <div class="posten-links"><span class="posten-text">${esc(p.text)}</span><span class="posten-preis">ca. ${euro(p.kosten)}${rechts.startsWith('<button') ? ' · ' + anzahl : ''}</span></div>
         <div class="posten-rechts">${rechts}</div></li>`);
     }
+    const guenstigTag = istGuenstig(g.key, S.daten.sachen) ? ' <span class="pille klein-pille">günstig</span>' : '';
     html += `<div class="gruppe">
-      <div class="gruppe-kopf"><span class="gruppe-name">${esc(g.name)}</span>${g.posten.length > 1 ? `<span class="leise klein">${g.posten.length} Portionen</span>` : ''}</div>
+      <div class="gruppe-kopf"><span class="gruppe-name">${esc(g.name)}${guenstigTag}</span>${g.posten.length > 1 ? `<span class="leise klein">${g.posten.length} Portionen</span>` : ''}</div>
       ${notizen(g.teile)}
       <ul class="posten">${zeilen.join('')}</ul>
     </div>`;
   }
   if (auf.posten.length) {
     html += `<div class="summe"><div>Insgesamt: ${auf.bedarf.map(b => esc(b.text)).join(' · ')}</div>
-      <div class="leise klein">Zusammen ca. ${euro(auf.gesamt)}, pro Person etwa ${euro(auf.ziel)}</div></div>`;
+      <div class="leise klein">Zusammen ca. ${euro(auf.gesamt)}, pro Person etwa ${euro(auf.ziel)}</div>
+      ${auf.posten.some(p => istGuenstig(p.key, S.daten.sachen))
+        ? '<div class="leise klein">Günstig: Wer zweimal hintereinander etwas Günstiges hatte, ist beim nächsten Mal bei den teureren Sachen dran.</div>' : ''}</div>`;
   }
   return html + '</section>';
 }
@@ -556,6 +569,7 @@ const sachenSauber = liste => liste
       name, einheit: String(s.einheit || '').trim(), notiz: String(s.notiz || '').trim(),
     };
     for (const f of ZAHLFELDER) n[f] = zahlLesen(s[f]);
+    n.guenstig = !!s.guenstig;
     if (!n.schritt) n.schritt = 1;
     if (!n.preisMenge) n.preisMenge = 1;
     return n;
@@ -584,14 +598,14 @@ function vorschauHtml() {
   const zeilen = [];
   for (const p of auf.posten) {
     const z = zeilen.find(x => x.text === p.text);
-    if (z) z.anzahl++; else zeilen.push({ text: p.text, kosten: p.kosten, anzahl: 1 });
+    if (z) z.anzahl++; else zeilen.push({ text: p.text, kosten: p.kosten, anzahl: 1, guenstig: istGuenstig(p.key, sachenSauber(S.entwurf)) });
   }
-  return `<ul class="vorschau-liste">${zeilen.map(z => `<li><span>${z.anzahl > 1 ? `<b>${z.anzahl} ×</b> ` : ''}${esc(z.text)}</span><span class="leise">je ca. ${euro(z.kosten)}</span></li>`).join('')}</ul>
+  return `<ul class="vorschau-liste">${zeilen.map(z => `<li><span>${z.anzahl > 1 ? `<b>${z.anzahl} ×</b> ` : ''}${esc(z.text)}${z.guenstig ? ' <span class="pille klein-pille">günstig</span>' : ''}</span><span class="leise">je ca. ${euro(z.kosten)}</span></li>`).join('')}</ul>
     <p class="leise klein">${auf.posten.length} Posten, zusammen ca. ${euro(auf.gesamt)}, pro Person etwa ${euro(auf.ziel)}</p>`;
 }
 
 // Feldweise vergleichen (die Datenbank ändert die Reihenfolge der Schlüssel)
-const listeVergleich = l => JSON.stringify(sachenSauber(l).map(s => [s.id, s.name, s.einheit, s.notiz, ...ZAHLFELDER.map(f => s[f])]));
+const listeVergleich = l => JSON.stringify(sachenSauber(l).map(s => [s.id, s.name, s.einheit, s.notiz, s.guenstig, ...ZAHLFELDER.map(f => s[f])]));
 function listeGeaendert() {
   return listeVergleich(S.entwurf) !== listeVergleich(S.daten.sachen);
 }
@@ -616,6 +630,8 @@ function tabListe() {
       ${feld(s, i, 'preisMenge', 'Menge zum Preis', 'inputmode="decimal"')}
     </div>
     ${feld(s, i, 'notiz', 'Hinweis in der Liste', 'placeholder="z. B. schon geschnitten" maxlength="80"')}
+    <label class="haken abstand-klein"><input type="checkbox" data-i="${i}" data-f="guenstig"${s.guenstig ? ' checked' : ''}> Günstige Sache
+      <span class="leise klein">(eigener Posten; wer sie zweimal hintereinander hatte, nimmt beim dritten Mal etwas Teureres)</span></label>
     <div class="sache-info leise klein" data-info="${i}">${sacheInfo(s)}</div>
   </section>`).join('');
   const geaendert = listeGeaendert();
@@ -624,6 +640,7 @@ function tabListe() {
     <p class="leise klein"><b>Pro Person:</b> so viel braucht jeder. <b>Fest dazu:</b> kommt einmal dazu, egal wie viele kommen (z. B. 2 Blöcke Butter).
     <b>Schritte:</b> wie fein man aufteilen kann (Mett in 50-g-Schritten, Butter nur ganze Blöcke). <b>Preis:</b> grob geschätzt, damit jeder Posten etwa gleich viel kostet.
     Bei der Einheit gehen Einzahl und Mehrzahl mit Schrägstrich, z. B. „Sack/Säcke“.</p>
+    <button class="knopf klein zweit abstand-klein" data-a="vorlage-laden">Startliste übernehmen</button>
   </section>
   ${karten}
   <button class="knopf zweit breit" data-a="sache-neu">+ Sache hinzufügen</button>
@@ -832,7 +849,12 @@ const AKTIONEN = {
   },
   async nehmen(el) {
     if (!S.ich) { toast('Tipp zuerst oben auf deinen Namen.'); oben(); return; }
-    const t = lage().t;
+    const L0 = lage();
+    if (L0.sperre && istGuenstig(el.dataset.key, S.daten.sachen)) {
+      toast('Du hattest die letzten zwei Male etwas Günstiges. Diesmal bitte etwas Teureres.');
+      return;
+    }
+    const t = L0.t;
     const ok = await mitLaden(() => api.nehmen(S.code, t.schluessel, S.ich, el.dataset.key), 'Eingetragen!');
     if (ok) {
       const L = lage();
@@ -905,11 +927,26 @@ const AKTIONEN = {
     const ohne = L.dabei.map(a => a.person).filter(p => L.zu.vonPerson[p] === undefined);
     const frei = L.auf.posten.filter((_, i) => L.zu.belegt[i] === null);
     for (let i = ohne.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ohne[i], ohne[j]] = [ohne[j], ohne[i]]; }
-    const paare = ohne.slice(0, frei.length).map((p, i) => [p, frei[i].key]);
+    // Wer nach der Günstig-Regel dran ist, bekommt zuerst etwas Teureres
+    const teuer = frei.filter(p => !istGuenstig(p.key, S.daten.sachen));
+    const billig = frei.filter(p => istGuenstig(p.key, S.daten.sachen));
+    ohne.sort((a, b) => Number(L.gesperrt(b)) - Number(L.gesperrt(a)));
+    const paare = [];
+    for (const p of ohne) {
+      const posten = (L.gesperrt(p) ? teuer.shift() || billig.shift() : billig.shift() || teuer.shift());
+      if (!posten) break;
+      paare.push([p, posten.key]);
+    }
     if (!paare.length || !confirm(`${paare.length} ${paare.length === 1 ? 'Person bekommt' : 'Leute bekommen'} zufällig einen freien Posten. Weiter?`)) return;
     await mitLaden(async () => {
       for (const [p, key] of paare) await api.nehmen(S.code, L.t.schluessel, p, key);
     }, `${paare.length} ${paare.length === 1 ? 'Posten' : 'Posten'} verteilt`);
+  },
+  'vorlage-laden'() {
+    if (!confirm('Die Einkaufsliste durch die Startliste ersetzen (Brötchen in Fünferschritten, Mett, Butter, Zwiebeln und Gewürze als günstige Sachen)? Danach noch auf „Änderungen speichern“ tippen.')) return;
+    S.entwurf = JSON.parse(JSON.stringify(VORLAGE));
+    render();
+    toast('Startliste geladen. Prüf die Vorschau und speichere dann.');
   },
   'sache-neu'() {
     S.entwurf.push({ id: 's' + Date.now().toString(36), name: '', einheit: 'Stück', proPerson: 0, fest: 1, schritt: 1, preis: 1, preisMenge: 1, notiz: '' });
@@ -1092,7 +1129,7 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.f !== undefined && el.dataset.i !== undefined && S.entwurf) {
     const s = S.entwurf[Number(el.dataset.i)];
-    s[el.dataset.f] = el.value;
+    s[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
     listeAuffrischen();
   } else if (el.id === 'vorschau-n') {
     S.vorschauN = el.value;

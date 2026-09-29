@@ -1,8 +1,8 @@
 // Service Worker: macht die Mitbringliste installierbar und zeigt sie auch ohne Netz an.
 // Online wird immer die neueste Fassung geholt, der Speicher ist nur der Notfall.
-const CACHE = 'mitbringliste-v2';
+const CACHE = 'mitbringliste-v3';
 const DATEIEN = ['./', './index.html', './style.css', './manifest.webmanifest', './icon.svg', './icon-192.png',
-  './js/app.js', './js/api.js', './js/aufteilen.js', './js/termine.js', './js/vorlage.js', './js/push.js', './js/push-schluessel.js'];
+  './js/app.js', './js/api.js', './js/aufteilen.js', './js/termine.js', './js/vorlage.js', './js/push.js', './js/push-schluessel.js', './js/regeln.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(DATEIEN)).then(() => self.skipWaiting()));

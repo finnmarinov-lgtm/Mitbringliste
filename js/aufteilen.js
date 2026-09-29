@@ -73,14 +73,16 @@ function bewerten(items, k, n, t) {
     const basis = Math.floor(it.schritte / ki), rest = it.schritte % ki;
     for (let j = 0; j < ki; j++) {
       const s = basis + (j < rest ? 1 : 0);
-      posten.push({ teile: [{ i, schritte: s }], w: s * it.w, geteilt: ki > 1, gemischt: false });
+      // eigen: günstige Sachen bleiben allein, es wird nichts dazugelegt
+      posten.push({ teile: [{ i, schritte: s }], w: s * it.w, geteilt: ki > 1, gemischt: false, eigen: !!it.sache.guenstig });
     }
   });
   const pool = items.map((_, i) => i).filter(i => !k[i])
     .sort((a, b) => items[b].w * items[b].schritte - items[a].w * items[a].schritte || a - b);
   if (pool.length) {
     const frei = n - posten.length;
-    let ziele = posten;
+    let ziele = posten.filter(p => !p.eigen);
+    if (!ziele.length) ziele = posten;
     if (frei > 0) {
       ziele = [];
       for (let j = 0; j < Math.min(frei, pool.length); j++) ziele.push({ teile: [], w: 0, geteilt: false, gemischt: false });
@@ -95,23 +97,28 @@ function bewerten(items, k, n, t) {
     }
   }
   let score = (n - posten.length) * t * t; // Leute ohne Posten zählen wie Posten für 0 €
-  for (const p of posten) score += (p.w - t) ** 2 + (p.gemischt ? 0.15 * t * t : 0);
+  for (const p of posten) {
+    const guenstige = p.teile.filter(x => items[x.i].sache.guenstig).length;
+    score += (p.w - t) ** 2 + (p.gemischt ? 0.15 * t * t : 0) + (guenstige > 1 ? t * t : 0); // Günstiges nicht zusammenlegen
+  }
   return { score, posten };
 }
 
-function suchen(items, start, n, t) {
-  let k = start.slice();
+// mins[i]: wie viele Posten Sache i mindestens bekommt (1 = eigener Posten)
+function suchen(items, start, n, t, mins) {
+  let k = start.map((x, i) => Math.max(x, mins[i]));
   const summe = a => a.reduce((x, y) => x + y, 0);
   while (summe(k) > n) {
-    let j = 0;
-    for (let i = 1; i < k.length; i++) if (k[i] > k[j]) j = i;
+    let j = -1;
+    for (let i = 0; i < k.length; i++) if (k[i] > mins[i] && (j < 0 || k[i] > k[j])) j = i;
+    if (j < 0) break;
     k[j]--;
   }
   let best = bewerten(items, k, n, t);
   for (let runde = 0; runde < 300; runde++) {
     let kandidat = null, kBest = null;
     const probe = k2 => {
-      for (let i = 0; i < k2.length; i++) if (k2[i] < 0 || k2[i] > items[i].schritte) return;
+      for (let i = 0; i < k2.length; i++) if (k2[i] < mins[i] || k2[i] > items[i].schritte) return;
       if (summe(k2) > n) return;
       const b = bewerten(items, k2, n, t);
       if (b.score < (kandidat ? kandidat.score : best.score) - EPS) { kandidat = b; kBest = k2; }
@@ -145,9 +152,12 @@ export function aufteilen(sachen, n) {
     q.map((x, i) => Math.min(items[i].schritte, Math.floor(x))),
     q.map((x, i) => Math.min(items[i].schritte, Math.max(1, Math.round(x)))),
   ];
+  // Günstige Sachen (z. B. Zwiebeln, Gewürze) bekommen einen eigenen Posten, sobald mindestens so viele
+  // Leute dabei sind, wie es Sachen gibt; bei kleineren Gruppen kommen sie zu teureren Sachen dazu
+  const mins = items.map(it => (n >= items.length && it.sache.guenstig ? 1 : 0));
   let best = null;
   for (const s of starts) {
-    const b = suchen(items, s, n, t);
+    const b = suchen(items, s, n, t, mins);
     if (!best || b.score < best.score - EPS) best = b;
   }
 
