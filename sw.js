@@ -1,8 +1,8 @@
 // Service Worker: macht die Mitbringliste installierbar und zeigt sie auch ohne Netz an.
 // Online wird immer die neueste Fassung geholt, der Speicher ist nur der Notfall.
-const CACHE = 'mitbringliste-v1';
+const CACHE = 'mitbringliste-v2';
 const DATEIEN = ['./', './index.html', './style.css', './manifest.webmanifest', './icon.svg', './icon-192.png',
-  './js/app.js', './js/api.js', './js/aufteilen.js', './js/termine.js', './js/vorlage.js'];
+  './js/app.js', './js/api.js', './js/aufteilen.js', './js/termine.js', './js/vorlage.js', './js/push.js', './js/push-schluessel.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(DATEIEN)).then(() => self.skipWaiting()));
@@ -26,4 +26,23 @@ self.addEventListener('fetch', e => {
     }
     return res;
   }).catch(() => caches.match(req, { ignoreSearch: true }).then(hit => hit || caches.match('./index.html'))));
+});
+
+// Erinnerung anzeigen (verschickt von erinnerung/senden.js)
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { text: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.titel || 'Mitbringliste', {
+    body: d.text || '', icon: 'icon-192.png', tag: d.tag || 'mitbringliste', data: { url: d.url || './' },
+  }));
+});
+
+// Tipp auf die Benachrichtigung: App öffnen oder nach vorn holen
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const ziel = new URL(e.notification.data?.url || './', self.registration.scope).href;
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(fenster => {
+    const offen = fenster.find(f => f.url.startsWith(self.registration.scope));
+    return offen ? offen.focus() : clients.openWindow(ziel);
+  }));
 });

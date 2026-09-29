@@ -1,0 +1,48 @@
+# Verschickt die Erinnerungen der Mitbringliste (erinnerung/senden.js).
+# Läuft alle 30 Minuten; von Hand startbar, auch mit einer Testnachricht an alle angemeldeten Geräte.
+name: Erinnerungen
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Testnachricht an alle angemeldeten Geräte schicken'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write   # zum Aktivhalten, siehe letzter Schritt
+
+concurrency:
+  group: erinnerungen
+  cancel-in-progress: false
+
+jobs:
+  senden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Europe/Berlin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Erinnerungen verschicken
+        run: node erinnerung/senden.js
+        env:
+          MB_GEHEIM: ${{ secrets.MB_GEHEIM }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          MB_TEST: ${{ inputs.test }}
+      # GitHub schaltet geplante Aufträge nach 60 Tagen ohne Änderungen am Repository ab.
+      # Das erneute Einschalten über die Schnittstelle setzt diese Frist zurück.
+      - name: Auftrag aktiv halten
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/erinnerung.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}

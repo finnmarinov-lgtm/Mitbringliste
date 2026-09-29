@@ -16,11 +16,16 @@ Web-App für das gemeinsame Frühstück am **ersten Mittwoch im Monat**: Jeder s
 | `js/termine.js` | Erster Mittwoch im Monat, Ferien und Feiertage Sachsen-Anhalt |
 | `js/api.js` | Verbindung zu Supabase, dazu der Demo-Modus |
 | `js/vorlage.js` | Startliste (Brötchen, Mett, Butter, Zwiebeln, Gewürze) |
-| `supabase.sql` | Tabellen und Funktionen, einmal im SQL-Editor ausführen |
+| `supabase.sql` | Tabellen und Funktionen, im SQL-Editor ausführen (darf mehrmals laufen) |
+| `js/push.js`, `js/push-schluessel.js` | Gerät für Erinnerungen an- und abmelden, öffentlicher VAPID-Schlüssel |
+| `erinnerung/planen.js` | Wer wann erinnert wird |
+| `erinnerung/senden.js` | Verschickt die Erinnerungen (läuft als GitHub-Auftrag) |
+| `.github/workflows/erinnerung.yml` | Der Auftrag: alle 30 Minuten, von Hand auch mit Testnachricht |
 | `manifest.webmanifest`, `sw.js`, `icon*` | App auf dem Startbildschirm |
 | `make-icons.js` | Erzeugt die PNG-Icons aus `icon.svg` (braucht Chrome oder Edge) |
 | `serve.js` | Testserver: `node serve.js`, dann http://localhost:4174/?demo |
 | `test/aufteilen.test.js` | Prüft die Aufteilung: `node test/aufteilen.test.js` |
+| `test/erinnerung.test.js` | Prüft die Erinnerungen: `TZ=Europe/Berlin node test/erinnerung.test.js` |
 
 ## So funktioniert es
 
@@ -33,9 +38,11 @@ Web-App für das gemeinsame Frühstück am **ersten Mittwoch im Monat**: Jeder s
 **Rollen:**
 - **Klassencode:** steckt im geteilten Link (`#k=...`), damit kann jeder abstimmen und sich etwas aussuchen.
 - **Moderator:** eine Person aus der Liste mit eigener PIN. Darf Termine, Einkaufsliste und Namen ändern.
-- **Admin (Finn):** Admin-Code. Darf zusätzlich Moderatoren ernennen und die Codes ändern.
+- **Admin (Finn):** Admin-Code. Darf zusätzlich Moderatoren ernennen und die Codes ändern. Ein zweiter Admin bekommt einfach den Admin-Code; wer man in der Liste ist („Wer bist du?“), merkt sich jedes Gerät getrennt davon.
 
 Der Klassencode steht im Klartext in der Datenbank (er ist ja für alle gedacht). Admin-Code und PINs liegen dort nur als SHA-256-Prüfsumme.
+
+**Erinnerungen:** Wer will, tippt in der App auf „Ja, erinnern“ und erlaubt Benachrichtigungen (auf dem iPhone nur, wenn die App auf dem Home-Bildschirm liegt). Einen Tag vor dem Termin um 18 Uhr (einstellbar unter „Mehr“) bekommt dann eine Nachricht, wer noch nicht abgestimmt hat („Bist du morgen dabei?“) oder zugesagt, aber nichts ausgesucht hat. Jede Erinnerung geht pro Termin nur einmal raus. Verschickt wird von einem GitHub-Auftrag (`.github/workflows/erinnerung.yml`, alle 30 Minuten) mit Web Push. Er braucht zwei Repository-Secrets: `VAPID_PRIVATE` (privater Teil zu `js/push-schluessel.js`) und `MB_GEHEIM` (Versand-Schlüssel, in der Datenbank nur als Prüfsumme in `mb_system`). Testnachricht: unter Actions → Erinnerungen → „Run workflow“ mit Haken bei „Testnachricht“. Die Protokolle des Auftrags sind öffentlich, deshalb stehen dort nur Zahlen.
 
 ## Einrichten (einmalig)
 

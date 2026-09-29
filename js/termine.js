@@ -139,6 +139,14 @@ export function freigabeZeit(t, einst) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - tage, uhr, 0, 0);
 }
 
+// Wann kommt die Erinnerung? (z. B. 1 Tag vorher um 18 Uhr)
+export function erinnerungZeit(t, einst) {
+  const d = ausIso(t.datum);
+  const tage = Number.isFinite(Number(einst?.erinnerungTage)) ? Number(einst.erinnerungTage) : 1;
+  const uhr = Number.isFinite(Number(einst?.erinnerungUhr)) ? Number(einst.erinnerungUhr) : 18;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - tage, uhr, 0, 0);
+}
+
 // Phase: abgesagt | anmeldung | liste | heute | vorbei
 export function phase(t, jetzt, einst) {
   if (t.abgesagt) return 'abgesagt';

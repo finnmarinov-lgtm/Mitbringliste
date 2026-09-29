@@ -9,4 +9,5 @@ export const VORLAGE = [
   { id: 'gewuerze', name: 'Gewürze', einheit: 'Stück', proPerson: 0, fest: 1, schritt: 1, preis: 2.00, preisMenge: 1, notiz: '' },
 ];
 
-export const EINSTELLUNGEN = { tage: 2, uhr: 18 };
+// Liste kommt 2 Tage vorher um 18 Uhr, Erinnerung 1 Tag vorher um 18 Uhr
+export const EINSTELLUNGEN = { tage: 2, uhr: 18, erinnerung: true, erinnerungTage: 1, erinnerungUhr: 18 };

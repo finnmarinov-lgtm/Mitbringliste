@@ -102,9 +102,10 @@ begin
     'sachen', g.sachen,
     'einstellungen', g.einstellungen,
     'rolle', v_rolle,
-    'personen', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'name', name, 'mod', mod_hash is not null)
-                          order by lower(name))
-                          from mb_person where gruppe = p_gruppe), '[]'::jsonb),
+    'personen', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'mod', p.mod_hash is not null,
+                            'abo', exists (select 1 from mb_abo a where a.gruppe = p.gruppe and a.person = p.id))
+                          order by lower(p.name))
+                          from mb_person p where p.gruppe = p_gruppe), '[]'::jsonb),
     'termine', coalesce((select jsonb_agg(jsonb_build_object('schluessel', schluessel, 'datum', datum,
                           'abgesagt', abgesagt, 'frei', frei, 'notiz', notiz))
                          from mb_termin where gruppe = p_gruppe and schluessel >= current_date - 120), '[]'::jsonb),
@@ -223,3 +224,125 @@ grant execute on function mb_laden(text, text) to anon, authenticated;
 grant execute on function mb_antworten(text, text, date, uuid, boolean) to anon, authenticated;
 grant execute on function mb_nehmen(text, text, date, uuid, text) to anon, authenticated;
 grant execute on function mb_admin(text, text, text, jsonb) to anon, authenticated;
+
+-- ===== Erinnerungen per Benachrichtigung (seit 29.09.2026) =====
+-- Ein GitHub-Auftrag (erinnerung/senden.js) holt alle 30 Minuten die Daten und verschickt die Erinnerungen.
+
+create table if not exists mb_abo (          -- ein Handy, das Erinnerungen bekommen will
+  endpoint text primary key check (endpoint like 'https://%' and length(endpoint) <= 1000),
+  gruppe text not null,
+  person uuid not null,
+  p256dh text not null check (length(p256dh) <= 200),
+  auth text not null check (length(auth) <= 100),
+  erstellt timestamptz not null default now(),
+  foreign key (gruppe, person) references mb_person(gruppe, id) on delete cascade
+);
+
+create table if not exists mb_gesendet (     -- wer für welchen Termin schon erinnert wurde
+  gruppe text not null,
+  schluessel date not null,
+  person uuid not null,
+  art text not null,                         -- 'abstimmen' oder 'aussuchen'
+  zeit timestamptz not null default now(),
+  primary key (gruppe, schluessel, person, art),
+  foreign key (gruppe, person) references mb_person(gruppe, id) on delete cascade
+);
+
+create table if not exists mb_system (       -- Prüfsumme des Versand-Schlüssels
+  schluessel text primary key,
+  wert text not null
+);
+
+alter table mb_abo enable row level security;
+alter table mb_gesendet enable row level security;
+alter table mb_system enable row level security;
+revoke all on mb_abo, mb_gesendet, mb_system from anon, authenticated;
+
+-- Handy für Erinnerungen anmelden (p_abo = PushSubscription als JSON)
+create or replace function mb_abo_setzen(p_gruppe text, p_code text, p_person uuid, p_abo jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform mb_rolle(p_gruppe, p_code);
+  if not exists (select 1 from mb_person where gruppe = p_gruppe and id = p_person) then raise exception 'keine_person'; end if;
+  if coalesce(p_abo->>'endpoint', '') not like 'https://%'
+     or p_abo->'keys'->>'p256dh' is null or p_abo->'keys'->>'auth' is null then
+    raise exception 'ungueltig';
+  end if;
+  insert into mb_abo (endpoint, gruppe, person, p256dh, auth)
+  values (p_abo->>'endpoint', p_gruppe, p_person, p_abo->'keys'->>'p256dh', p_abo->'keys'->>'auth')
+  on conflict (endpoint) do update set
+    gruppe = excluded.gruppe, person = excluded.person, p256dh = excluded.p256dh, auth = excluded.auth, erstellt = now();
+end $$;
+
+create or replace function mb_abo_loeschen(p_gruppe text, p_code text, p_endpoint text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform mb_rolle(p_gruppe, p_code);
+  delete from mb_abo where gruppe = p_gruppe and endpoint = p_endpoint;
+end $$;
+
+create or replace function mb_versand_pruefen(p_geheim text) returns void
+language plpgsql as $$
+begin
+  if not exists (select 1 from mb_system where schluessel = 'versand'
+                 and wert = encode(sha256(convert_to(coalesce(p_geheim, ''), 'UTF8')), 'hex')) then
+    perform pg_sleep(0.4);
+    raise exception 'falscher_code';
+  end if;
+end $$;
+
+-- Einmalig: Versand-Schlüssel festlegen (geht nur, solange noch keiner gesetzt ist)
+create or replace function mb_versand_einrichten(p_geheim text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if length(coalesce(p_geheim, '')) < 32 then raise exception 'code_zu_kurz'; end if;
+  insert into mb_system (schluessel, wert)
+  values ('versand', encode(sha256(convert_to(p_geheim, 'UTF8')), 'hex'))
+  on conflict (schluessel) do nothing;
+  if not found then raise exception 'gibt_es_schon'; end if;
+end $$;
+
+-- Alles, was der Versand braucht: nur Listen, in denen jemand Erinnerungen eingeschaltet hat
+create or replace function mb_versand_daten(p_geheim text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  perform mb_versand_pruefen(p_geheim);
+  return coalesce((select jsonb_agg(jsonb_build_object(
+    'id', g.id, 'name', g.name, 'sachen', g.sachen, 'einstellungen', g.einstellungen,
+    'personen', (select coalesce(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name)), '[]'::jsonb)
+                 from mb_person p where p.gruppe = g.id),
+    'termine', (select coalesce(jsonb_agg(jsonb_build_object('schluessel', t.schluessel, 'datum', t.datum,
+                  'abgesagt', t.abgesagt, 'frei', t.frei, 'notiz', t.notiz)), '[]'::jsonb)
+                from mb_termin t where t.gruppe = g.id and t.schluessel >= current_date - 60),
+    'antworten', (select coalesce(jsonb_agg(jsonb_build_object('schluessel', a.schluessel, 'person', a.person,
+                    'dabei', a.dabei, 'posten', a.posten, 'seit', a.seit)), '[]'::jsonb)
+                  from mb_antwort a where a.gruppe = g.id and a.schluessel >= current_date - 60),
+    'abos', (select coalesce(jsonb_agg(jsonb_build_object('endpoint', b.endpoint, 'person', b.person,
+               'p256dh', b.p256dh, 'auth', b.auth)), '[]'::jsonb)
+             from mb_abo b where b.gruppe = g.id),
+    'gesendet', (select coalesce(jsonb_agg(jsonb_build_object('schluessel', s.schluessel, 'person', s.person,
+                   'art', s.art)), '[]'::jsonb)
+                 from mb_gesendet s where s.gruppe = g.id and s.schluessel >= current_date - 60)
+  )) from mb_gruppe g where exists (select 1 from mb_abo b where b.gruppe = g.id)), '[]'::jsonb);
+end $$;
+
+-- Nach dem Versand: merken, wer erinnert wurde, und abgelaufene Handys entfernen
+create or replace function mb_versand_merken(p_geheim text, p_gesendet jsonb, p_abgelaufen jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform mb_versand_pruefen(p_geheim);
+  insert into mb_gesendet (gruppe, schluessel, person, art)
+  select x->>'gruppe', (x->>'schluessel')::date, (x->>'person')::uuid, x->>'art'
+  from jsonb_array_elements(coalesce(p_gesendet, '[]'::jsonb)) x
+  where exists (select 1 from mb_person p where p.gruppe = x->>'gruppe' and p.id = (x->>'person')::uuid)
+  on conflict do nothing;
+  delete from mb_abo where endpoint in (select jsonb_array_elements_text(coalesce(p_abgelaufen, '[]'::jsonb)));
+  delete from mb_gesendet where schluessel < current_date - 60;
+end $$;
+
+revoke execute on function mb_versand_pruefen(text) from public, anon, authenticated;
+grant execute on function mb_abo_setzen(text, text, uuid, jsonb) to anon, authenticated;
+grant execute on function mb_abo_loeschen(text, text, text) to anon, authenticated;
+grant execute on function mb_versand_einrichten(text) to anon, authenticated;
+grant execute on function mb_versand_daten(text) to anon, authenticated;
+grant execute on function mb_versand_merken(text, jsonb, jsonb) to anon, authenticated;

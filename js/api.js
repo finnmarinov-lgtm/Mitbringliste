@@ -3,7 +3,7 @@
 
 import { VORLAGE, EINSTELLUNGEN } from './vorlage.js';
 
-const SB = {
+export const SB = {
   url: 'https://yzzipjtounvktdhhvrnt.supabase.co',
   key: 'sb_publishable_OCNFFT4wa4CMaHyhcLAY4A_u2flZF1s', // öffentlicher Schlüssel, darf im Code stehen
 };
@@ -45,6 +45,8 @@ function supabaseApi(gruppe) {
       rpc('mb_admin', { p_gruppe: gruppe, p_admin: code, p_aktion: aktion, p_daten: daten }),
     einrichten: (name, code, admin, sachen) =>
       rpc('mb_einrichten', { p_gruppe: gruppe, p_name: name, p_code: code, p_admin: admin, p_sachen: sachen }),
+    abo: (code, person, abo) => rpc('mb_abo_setzen', { p_gruppe: gruppe, p_code: code, p_person: person, p_abo: abo }),
+    aboWeg: (code, endpoint) => rpc('mb_abo_loeschen', { p_gruppe: gruppe, p_code: code, p_endpoint: endpoint }),
   };
 }
 
@@ -88,7 +90,7 @@ function demoApi(gruppe) {
       const r = rolle(code);
       return {
         name: db.name, code: db.code, sachen: db.sachen, einstellungen: db.einstellungen, rolle: r,
-        personen: db.personen.map(p => ({ id: p.id, name: p.name, mod: !!p.pin }))
+        personen: db.personen.map(p => ({ id: p.id, name: p.name, mod: !!p.pin, abo: (db.abos || []).some(a => a.person === p.id) }))
           .sort((a, b) => a.name.localeCompare(b.name, 'de')),
         termine: db.termine, antworten: db.antworten,
       };
@@ -149,6 +151,16 @@ function demoApi(gruppe) {
       return {};
     },
     async einrichten() { throw new ApiFehler('gibt_es_schon'); },
+    async abo(code, pid, abo) {
+      await warte(); rolle(code); person(pid);
+      db.abos = (db.abos || []).filter(a => a.endpoint !== abo.endpoint).concat({ endpoint: abo.endpoint, person: pid });
+      schreiben(db);
+    },
+    async aboWeg(code, endpoint) {
+      await warte(); rolle(code);
+      db.abos = (db.abos || []).filter(a => a.endpoint !== endpoint);
+      schreiben(db);
+    },
   };
 }
 

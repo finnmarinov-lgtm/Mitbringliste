@@ -205,6 +205,14 @@ textarea.feld { resize: vertical; }
 .geaendert .ic { margin-top: 1px; }
 .geaendert .link { display: block; color: inherit; }
 
+.erinnerung { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--feld); font-size: .92rem; }
+.erinnerung span { flex: 1; }
+.erinnerung .knopf, .erinnerung .link { flex: none; }
+.erinnerung.an { background: var(--gut-hell); }
+.erinnerung.an .ic { color: var(--gut); }
+.glocke { display: inline-flex; color: var(--gut); }
+.glocke .ic { width: 18px; height: 18px; }
+
 /* ---------- Namen ---------- */
 .namen { display: flex; flex-wrap: wrap; gap: 8px; }
 .name {

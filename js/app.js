@@ -1,6 +1,7 @@
 // Mitbringliste: Oberfläche. Daten über api.js, Aufteilung aus aufteilen.js, Termine aus termine.js.
 import { aufteilen, zuordnen, bedarf, euro, mengeText } from './aufteilen.js';
-import { termine, phase, freigabeZeit, kurzDatum, WOCHENTAGE, MONATE, ausIso, iso, ferienLaden } from './termine.js';
+import { termine, phase, freigabeZeit, erinnerungZeit, kurzDatum, WOCHENTAGE, MONATE, ausIso, iso, ferienLaden } from './termine.js';
+import { pushMoeglich, aboHolen, abonnieren } from './push.js';
 import { macheApi, fehlerText, DEMO_CODES } from './api.js';
 import { VORLAGE, EINSTELLUNGEN } from './vorlage.js';
 
@@ -19,7 +20,7 @@ const speicher = {
 };
 const K = {
   code: 'mb_code_' + GRUPPE, mod: 'mb_mod_' + GRUPPE, ich: 'mb_ich_' + GRUPPE,
-  gesehen: 'mb_gesehen_' + GRUPPE, install: 'mb_install_weg',
+  gesehen: 'mb_gesehen_' + GRUPPE, install: 'mb_install_weg', abo: 'mb_abo_' + GRUPPE,
 };
 
 const S = {
@@ -31,6 +32,7 @@ const S = {
   ansicht: 'laden',              // laden | code | einrichten | fehler | haupt | moderation
   tab: 'termin', fehler: '', busy: false,
   entwurf: null, vorschauN: null, modFormFuer: null, installPrompt: null,
+  push: 'unbekannt',             // an | aus | blockiert | ios | nein | unbekannt
 };
 
 // Klassencode aus dem geteilten Link (#k=...) übernehmen und aus der Adresszeile nehmen
@@ -62,6 +64,7 @@ const ICON = {
   punkte: svg('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
   zahnrad: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'),
   muell: svg('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>'),
+  glocke: svg('<path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/>'),
 };
 const logo = (klasse = '') => `<img src="icon.svg" alt="" class="logo ${klasse}" width="40" height="40">`;
 
@@ -87,6 +90,7 @@ async function neuLaden(erzwingen = false) {
     termineBerechnen();
     if (['laden', 'code', 'fehler'].includes(S.ansicht)) S.ansicht = 'haupt';
     render();
+    if (S.push === 'unbekannt') pushStatusLaden().then(() => { if (S.ansicht === 'haupt') render(); });
   } catch (e) {
     if (e.code === 'falscher_code') {
       speicher.weg(K.code);
@@ -273,7 +277,42 @@ function ichKarte(L) {
     html += `<div class="frage">${meine?.dabei ? (warst ? 'Du warst dabei.' : 'Du bist dabei.') : meine ? (warst ? 'Du warst nicht dabei.' : 'Du bist nicht dabei.') : 'Du hast nicht abgestimmt.'}</div>`;
   }
   if (ph !== 'anmeldung' && meine?.dabei) html += aufgabeBlock(L);
+  if (offen && meine?.dabei !== false) html += erinnerungZeile(L);
   return html + '</section>';
+}
+
+// Erinnerung per Benachrichtigung ein- und ausschalten
+function erinnerungZeile(L) {
+  const e = einst();
+  if (e.erinnerung === false || S.push === 'nein' || S.push === 'unbekannt') return '';
+  const z = erinnerungZeit(L.t, e);
+  const wann = jetzt() < z ? `am ${WOCHENTAGE[z.getDay()]} um ${uhr(z)}` : 'gleich';
+  switch (S.push) {
+    case 'an':
+      return `<div class="erinnerung an">${ICON.glocke}<span>Erinnerung ist an. Falls dann noch was fehlt, meldet sich die App ${wann}.</span>
+        <button class="link" data-a="push-aus">Ausschalten</button></div>`;
+    case 'aus':
+      return `<div class="erinnerung">${ICON.glocke}<span>Soll dich die App ${wann} erinnern, falls du bis dahin noch nicht abgestimmt oder nichts ausgesucht hast?</span>
+        <button class="knopf klein zweit" data-a="push-an">Ja, erinnern</button></div>`;
+    case 'blockiert':
+      return `<div class="erinnerung leise">${ICON.glocke}<span>Benachrichtigungen sind für diese Seite blockiert. Wenn du erinnert werden willst, erlaube sie in den Einstellungen deines Browsers.</span></div>`;
+    case 'ios':
+      return `<div class="erinnerung leise">${ICON.glocke}<span>Auf dem iPhone kann die App dich nur erinnern, wenn sie auf dem Home-Bildschirm liegt (Anleitung unten).</span></div>`;
+    default:
+      return '';
+  }
+}
+
+async function pushStatusLaden() {
+  if (!pushMoeglich()) { S.push = istIOS() && !istApp() ? 'ios' : 'nein'; return; }
+  if (Notification.permission === 'denied') { S.push = 'blockiert'; return; }
+  let abo = null;
+  try { abo = await aboHolen(); } catch { /* egal */ }
+  S.push = abo ? 'an' : 'aus';
+  // Gehört das Abo noch zu einem anderen Namen (z. B. nach "Nicht du?"), neu zuordnen
+  if (abo && S.ich && S.code && speicher.get(K.abo) !== S.ich) {
+    try { await api.abo(S.code, S.ich, abo.toJSON()); speicher.set(K.abo, S.ich); } catch { /* beim nächsten Mal */ }
+  }
 }
 
 function notizen(teile) {
@@ -632,12 +671,14 @@ function tabLeute() {
     <ul class="leute-liste">${leute.map(p => `<li>
       <div class="leute-zeile">
         <input class="feld" data-person="${p.id}" value="${esc(p.name)}" maxlength="40" aria-label="Name ändern">
+        ${p.abo ? `<span class="glocke" title="Hat Erinnerungen eingeschaltet" aria-label="Erinnerungen an">${ICON.glocke}</span>` : ''}
         ${p.mod ? '<span class="pille mod">Moderator</span>' : ''}
         <button class="knopf-icon klein" data-a="person-weg" data-id="${p.id}" aria-label="${esc(p.name)} entfernen">${ICON.muell}</button>
       </div>
       ${admin ? modZeile(p) : ''}
     </li>`).join('')}</ul>
-    ${leute.length ? '<p class="leise klein">Namen ändern: einfach reinschreiben, gespeichert wird beim Verlassen des Feldes.</p>' : ''}
+    ${leute.length ? `<p class="leise klein">Namen ändern: einfach reinschreiben, gespeichert wird beim Verlassen des Feldes.
+      <span class="inline-ic">${ICON.glocke}</span> = hat Erinnerungen eingeschaltet (${leute.filter(p => p.abo).length} von ${leute.length}).</p>` : ''}
   </section>`;
 }
 
@@ -656,6 +697,11 @@ function tabMehr() {
       <div class="feld-label">Die Mitbringliste kommt
         <div class="zeile"><input id="e-tage" class="feld mini" type="number" min="0" max="14" value="${e.tage}" aria-label="Tage vorher"> Tage vorher um
         <input id="e-uhr" class="feld mini" type="number" min="0" max="23" value="${e.uhr}" aria-label="Uhrzeit"> Uhr</div></div>
+      <label class="haken"><input id="e-erinnerung" type="checkbox"${e.erinnerung !== false ? ' checked' : ''}> Erinnerungen verschicken
+        <span class="leise klein">(an alle, die sie eingeschaltet und noch nicht abgestimmt oder nichts ausgesucht haben)</span></label>
+      <div class="feld-label">Die Erinnerung kommt
+        <div class="zeile"><input id="e-etage" class="feld mini" type="number" min="0" max="14" value="${e.erinnerungTage}" aria-label="Tage vorher"> Tage vorher um
+        <input id="e-euhr" class="feld mini" type="number" min="0" max="23" value="${e.erinnerungUhr}" aria-label="Uhrzeit der Erinnerung"> Uhr</div></div>
       <button class="knopf">Speichern</button>
     </form>
   </section>
@@ -725,7 +771,48 @@ const AKTIONEN = {
     const i = S.termine.findIndex(x => x.schluessel === S.gewaehlt) + Number(el.dataset.d);
     if (S.termine[i]) { S.gewaehlt = S.termine[i].schluessel; render(); }
   },
-  ich(el) { S.ich = el.dataset.id; speicher.set(K.ich, S.ich); render(); },
+  async ich(el) {
+    S.ich = el.dataset.id;
+    speicher.set(K.ich, S.ich);
+    render();
+    if (S.push === 'an') { await pushStatusLaden(); render(); }
+  },
+  async 'push-an'() {
+    if (!S.ich) { toast('Tipp zuerst oben auf deinen Namen.'); return; }
+    if (S.busy) return;
+    S.busy = true;
+    try {
+      const abo = await abonnieren();
+      await api.abo(S.code, S.ich, abo.toJSON());
+      speicher.set(K.abo, S.ich);
+      S.push = 'an';
+      toast('Erinnerung ist an', 'gut');
+    } catch (e) {
+      if (e.code === 'blockiert') { S.push = 'blockiert'; toast('Benachrichtigungen wurden nicht erlaubt.'); }
+      else if (e.code === 'abgebrochen') toast('Ohne Erlaubnis geht es leider nicht.');
+      else if (e.code === 'kein_sw') toast('Das klappt gerade nicht. Lade die Seite neu und versuch es nochmal.', 'schlecht');
+      else if (e instanceof DOMException) toast('Dieser Browser kann leider keine Erinnerungen empfangen. Probier es in Chrome oder als App.', 'schlecht');
+      else toast(fehlerText(e), 'schlecht');
+    } finally {
+      S.busy = false;
+      render();
+    }
+  },
+  async 'push-aus'() {
+    try {
+      const abo = await aboHolen();
+      if (abo) {
+        await api.aboWeg(S.code, abo.endpoint).catch(() => {});
+        await abo.unsubscribe();
+      }
+      speicher.weg(K.abo);
+      S.push = 'aus';
+      toast('Erinnerung ist aus');
+    } catch (e) {
+      toast(fehlerText(e), 'schlecht');
+    }
+    render();
+  },
   'ich-weg'() { S.ich = null; speicher.weg(K.ich); render(); oben(); },
   async dabei(el) {
     const L = lage();
@@ -926,11 +1013,14 @@ const FORMULARE = {
     if (ok) { S.modFormFuer = null; render(); }
   },
   async einstellungen() {
-    const tage = Math.max(0, Math.min(14, Math.round(zahlLesen(document.getElementById('e-tage').value))));
-    const stunde = Math.max(0, Math.min(23, Math.round(zahlLesen(document.getElementById('e-uhr').value))));
+    const zahl = (id, max) => Math.max(0, Math.min(max, Math.round(zahlLesen(document.getElementById(id).value))));
     await mitLaden(() => api.admin(S.mod, 'einstellungen', {
       name: document.getElementById('e-name').value.trim(),
-      einstellungen: { ...einst(), tage, uhr: stunde },
+      einstellungen: {
+        ...einst(), tage: zahl('e-tage', 14), uhr: zahl('e-uhr', 23),
+        erinnerung: document.getElementById('e-erinnerung').checked,
+        erinnerungTage: zahl('e-etage', 14), erinnerungUhr: zahl('e-euhr', 23),
+      },
     }), 'Gespeichert');
   },
   async klassencode() {
@@ -1020,6 +1110,9 @@ addEventListener('appinstalled', () => {
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 }
+
+// Zum Testen auf dem eigenen Rechner: Zustand in der Konsole erreichbar
+if (location.hostname === 'localhost') window.__mb = { S, render, lage };
 
 // ---------- Start ----------
 ferienLaden().then(neu => {
