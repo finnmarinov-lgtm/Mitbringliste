@@ -1,7 +1,7 @@
 {
-  "name": "Mitbringliste",
-  "short_name": "Mitbringen",
-  "description": "Wer ist dabei, wer bringt was mit? Die Mitbringliste für den ersten Mittwoch im Monat.",
+  "name": "MMM – Mitbringliste",
+  "short_name": "MMM",
+  "description": "MMM – Monatlicher Mett-Mittwoch: Wer ist dabei, wer bringt was mit?",
   "lang": "de",
   "start_url": "./",
   "scope": "./",

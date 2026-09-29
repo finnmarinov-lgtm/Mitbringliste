@@ -147,6 +147,9 @@ textarea.feld { resize: vertical; }
 /* ---------- Start (Code, Einrichten) ---------- */
 .start { text-align: center; padding-top: 12vh; display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .start h1 { font-size: 1.6rem; }
+.start-titel h1 { font-size: 3rem; letter-spacing: .04em; line-height: 1; }
+.start-titel .motto { display: block; margin-top: 4px; font-size: 1.05rem; font-weight: 600; color: var(--leise); }
+.motto b { color: var(--akzent); font-weight: 800; }
 .start p { max-width: 380px; margin: 0; }
 .zeile-form { display: flex; gap: 8px; width: 100%; max-width: 380px; }
 .breit-form { width: 100%; max-width: 380px; text-align: left; }

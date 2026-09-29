@@ -67,6 +67,8 @@ const ICON = {
   glocke: svg('<path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/>'),
 };
 const logo = (klasse = '') => `<img src="icon.svg" alt="" class="logo ${klasse}" width="40" height="40">`;
+// Das Motto: MMM – Monatlicher Mett-Mittwoch (Anfangsbuchstaben hervorgehoben)
+const MOTTO = '<span class="motto"><b>M</b>onatlicher <b>M</b>ett-<b>M</b>ittwoch</span>';
 
 let toastUhr;
 function toast(text, art = '') {
@@ -159,8 +161,8 @@ function render() {
 function ansichtCode() {
   return `<main class="start">
     ${logo('gross')}
-    <h1>Mitbringliste</h1>
-    <p>Gib den Klassencode ein. Er steckt im Link aus eurem Klassenchat, sonst frag in der Klasse nach.</p>
+    <div class="start-titel"><h1>MMM</h1>${MOTTO}</div>
+    <p>Die Mitbringliste: Gib den Klassencode ein. Er steckt im Link aus eurem Klassenchat, sonst frag in der Klasse nach.</p>
     <form class="zeile-form" data-form="code">
       <input id="code-feld" class="feld" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Klassencode" aria-label="Klassencode" required>
       <button class="knopf">Weiter</button>
@@ -176,7 +178,7 @@ function ansichtEinrichten() {
     <h1>Neue Liste einrichten</h1>
     <p>Das machst du nur einmal. Danach trägst du die Namen ein und schickst den Link in den Klassenchat.</p>
     <form class="spalte breit-form" data-form="einrichten">
-      <label class="feld-label">Name der Runde<input id="ein-name" class="feld" value="Mett-Frühstück" maxlength="40" required></label>
+      <label class="feld-label">Name der Runde<input id="ein-name" class="feld" value="MMM" maxlength="40" required></label>
       <label class="feld-label">Klassencode <span class="leise">mind. 4 Zeichen, steckt im Link für alle</span>
         <input id="ein-code" class="feld" autocomplete="off" autocapitalize="off" spellcheck="false" minlength="4" required></label>
       <label class="feld-label">Admin-Code <span class="leise">mind. 6 Zeichen, nur für dich</span>
@@ -200,7 +202,7 @@ function ansichtFehler() {
 function kopfHaupt() {
   return `<header class="kopf">
     ${logo()}
-    <div class="kopf-mitte"><h1>${esc(S.daten.name)}</h1><div class="kopf-unter">Mitbringliste${DEMO ? ' · Demo' : ''}</div></div>
+    <div class="kopf-mitte"><h1>${esc(S.daten.name)}</h1><div class="kopf-unter">${MOTTO}${DEMO ? ' · Demo' : ''}</div></div>
     <button class="knopf-icon" data-a="moderation" aria-label="Moderation">${ICON.zahnrad}</button>
   </header>`;
 }
@@ -233,7 +235,7 @@ function statusText({ t, ph }) {
       return `Abstimmung läuft · Liste kommt ${WOCHENTAGE[f.getDay()]}, ${uhr(f)}`;
     }
     case 'liste': return 'Die Mitbringliste ist da';
-    case 'heute': return 'Heute ist es so weit!';
+    case 'heute': return ausIso(t.datum).getDay() === 3 ? 'Heute ist Mett-Mittwoch!' : 'Heute ist es so weit!';
     default: return 'Vorbei';
   }
 }
@@ -401,7 +403,7 @@ function listeKarte(L) {
       <ul class="posten">${zeilen.join('')}</ul>
     </div>`;
   }
-  if (auf.bedarf.length) {
+  if (auf.posten.length) {
     html += `<div class="summe"><div>Insgesamt: ${auf.bedarf.map(b => esc(b.text)).join(' · ')}</div>
       <div class="leise klein">Zusammen ca. ${euro(auf.gesamt)}, pro Person etwa ${euro(auf.ziel)}</div></div>`;
   }

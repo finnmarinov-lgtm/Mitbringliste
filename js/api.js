@@ -64,7 +64,7 @@ function demoApi(gruppe) {
   let db = lesen();
   if (!db) {
     db = {
-      name: 'Mett-Frühstück (Demo)', code: DEMO_CODES.klasse, admin: DEMO_CODES.admin,
+      name: 'MMM (Demo)', code: DEMO_CODES.klasse, admin: DEMO_CODES.admin,
       sachen: VORLAGE, einstellungen: EINSTELLUNGEN,
       personen: DEMO_NAMEN.map(name => ({ id: neueId(), name })), termine: [], antworten: [],
     };
