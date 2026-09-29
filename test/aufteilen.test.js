@@ -45,10 +45,11 @@ console.log('  verloren:', z14.verloren, ' frei:', z14.belegt.filter(x => x === 
 const wegM = antworten.find(a => a.posten === 'mett');
 const z14m = zuordnen(r14.posten, antworten.filter(a => a !== wegM));
 console.log('Nach Absage (Mett) bei 14: verloren', z14m.verloren, ' frei:', z14m.belegt.filter(x => x === null).length);
-// Doppelt gewaehlt: 11 Leute wollen Mett, aber nur 10 Posten
-const doppelt = leute.slice(0, 11).map((p, i) => ({ person: p, dabei: true, posten: 'mett', seit: '2026-10-05T18:00:' + String(i).padStart(2, '0') }));
+// Doppelt gewaehlt: einer mehr will Mett, als es Mett-Posten gibt
+const mettPosten = r15.posten.filter(p => p.key === 'mett').length;
+const doppelt = leute.slice(0, mettPosten + 1).map((p, i) => ({ person: p, dabei: true, posten: 'mett', seit: '2026-10-05T18:00:' + String(i).padStart(2, '0') }));
 const zd = zuordnen(r15.posten, doppelt);
-pruef(zd.verloren.length === 1 && zd.verloren[0] === 'p10', 'der Letzte beim Mett geht leer aus');
+pruef(zd.verloren.length === 1 && zd.verloren[0] === leute[mettPosten], 'der Letzte beim Mett geht leer aus');
 // Ohne Preise
 const ohne = aufteilen(VORLAGE.map(s => ({ ...s, preis: 0 })), 10);
 pruef(ohne.posten.length === 10, 'ohne Preise trotzdem 10 Posten: ' + ohne.posten.length);
