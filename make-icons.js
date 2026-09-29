@@ -1,5 +1,5 @@
-// Erzeugt die App-Icons (PNG) aus icon.svg mit Chrome oder Edge ohne Fenster.
-// Aufruf: node make-icons.js
+// Erzeugt die App-Icons (PNG) aus icon.svg und das Vorschaubild vorschau.png aus grafik/vorschau.html,
+// mit Chrome oder Edge ohne Fenster. Aufruf: node make-icons.js
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -35,3 +35,18 @@ bild('icon-512.png', 512);
 bild('icon-180.png', 180, { eckig: true });
 bild('icon-maskable-512.png', 512, { eckig: true, rand: 0.8 });
 rmSync(ordner, { recursive: true, force: true });
+
+// Vorschaubild beim Teilen des Links (1200 × 630); Schriften aus dem Netz, deshalb etwas Zeit lassen
+execFileSync(BROWSER, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--window-size=1200,630',
+  '--virtual-time-budget=8000', '--allow-file-access-from-files', `--screenshot=${join(process.cwd(), 'vorschau.png')}`,
+  new URL('./grafik/vorschau.html', import.meta.url).href], { stdio: 'ignore' });
+// Als JPG speichern (kleiner, damit WhatsApp & Co. die Vorschau sicher anzeigen); nutzt .NET über PowerShell
+const png = join(process.cwd(), 'vorschau.png'), jpg = join(process.cwd(), 'vorschau.jpg');
+execFileSync('powershell', ['-NoProfile', '-Command', `Add-Type -AssemblyName System.Drawing;
+  $img = [System.Drawing.Image]::FromFile('${png}');
+  $enc = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' };
+  $par = New-Object System.Drawing.Imaging.EncoderParameters 1;
+  $par.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 88L;
+  $img.Save('${jpg}', $enc, $par); $img.Dispose()`], { stdio: 'inherit' });
+rmSync(png);
+console.log('geschrieben: vorschau.jpg');
