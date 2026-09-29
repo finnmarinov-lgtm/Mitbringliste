@@ -1,5 +1,5 @@
 // Mitbringliste: Oberfläche. Daten über api.js, Aufteilung aus aufteilen.js, Termine aus termine.js.
-import { aufteilen, zuordnen, bedarf, euro, mengeText } from './aufteilen.js';
+import { aufteilen, zuordnen, bedarf, euro, teilText } from './aufteilen.js';
 import { termine, phase, freigabeZeit, erinnerungZeit, kurzDatum, WOCHENTAGE, MONATE, ausIso, iso, ferienLaden } from './termine.js';
 import { pushMoeglich, aboHolen, abonnieren } from './push.js';
 import { macheApi, fehlerText, DEMO_CODES } from './api.js';
@@ -561,12 +561,17 @@ const sachenSauber = liste => liste
     return n;
   });
 
+// Wofür gilt der Preis? "10 Brötchen", "100 g Mett", "1 Block Butter"
+function preisFuer(s) {
+  const sauber = sachenSauber([s])[0];
+  return sauber ? teilText(sauber, sauber.preisMenge) : 'die Menge';
+}
+
 function sacheInfo(s) {
   const n = Math.max(1, Number(S.vorschauN) || 1);
   const sauber = sachenSauber([s])[0];
   if (!sauber) return 'Ohne Namen wird die Sache nicht gespeichert.';
-  const menge = mengeText(sauber.einheit, sauber.preisMenge);
-  const preis = `Preis: ${euro(sauber.preis)} für ${esc(/^[\d,.]+$/.test(menge) ? menge + ' Stück' : menge)}`;
+  const preis = `Preis: ${euro(sauber.preis)} für ${esc(preisFuer(s))}`;
   const b = bedarf([sauber], n)[0];
   if (!b) return preis + ' · wird gerade nicht gebraucht';
   return `${preis} · bei ${n} ${n === 1 ? 'Person' : 'Leuten'}: ${esc(b.text)} für ca. ${euro(b.kosten)}`;
@@ -607,8 +612,8 @@ function tabListe() {
       ${feld(s, i, 'fest', 'Fest dazu', 'inputmode="decimal"')}
       ${feld(s, i, 'einheit', 'Einheit', 'placeholder="Stück, g, Block/Blöcke"')}
       ${feld(s, i, 'schritt', 'In Schritten von', 'inputmode="decimal"')}
-      ${feld(s, i, 'preis', 'Preis ca. (€)', 'inputmode="decimal"')}
-      ${feld(s, i, 'preisMenge', 'für Menge', 'inputmode="decimal"')}
+      ${feld(s, i, 'preis', `Preis ca. (€) <span class="preis-fuer" data-pf="${i}">für ${esc(preisFuer(s))}</span>`, 'inputmode="decimal"')}
+      ${feld(s, i, 'preisMenge', 'Menge zum Preis', 'inputmode="decimal"')}
     </div>
     ${feld(s, i, 'notiz', 'Hinweis in der Liste', 'placeholder="z. B. schon geschnitten" maxlength="80"')}
     <div class="sache-info leise klein" data-info="${i}">${sacheInfo(s)}</div>
@@ -634,6 +639,7 @@ function listeAuffrischen() {
   const v = document.getElementById('vorschau');
   if (v) v.innerHTML = vorschauHtml();
   document.querySelectorAll('[data-info]').forEach(el => { el.innerHTML = sacheInfo(S.entwurf[el.dataset.info]); });
+  document.querySelectorAll('[data-pf]').forEach(el => { el.textContent = 'für ' + preisFuer(S.entwurf[el.dataset.pf]); });
   const k = document.getElementById('sachen-speichern');
   if (k) {
     const g = listeGeaendert();
