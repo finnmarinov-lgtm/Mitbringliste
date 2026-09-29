@@ -8,9 +8,10 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(DATEIEN)).then(() => self.skipWaiting()));
 });
 
+// Nur eigene alte Speicher löschen: Petri Heil und Feuer Frei liegen unter derselben Adresse
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k.startsWith('mitbringliste-') && k !== CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
