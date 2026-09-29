@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#fff6ea"/>
+      <stop offset="1" stop-color="#f3d3ad"/>
+    </radialGradient>
+    <linearGradient id="kruste" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dc9a4e"/>
+      <stop offset="1" stop-color="#a5622a"/>
+    </linearGradient>
+    <linearGradient id="mett" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ee7d72"/>
+      <stop offset="1" stop-color="#cc4c45"/>
+    </linearGradient>
+  </defs>
+  <rect id="grund" width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g id="bild">
+    <ellipse cx="256" cy="414" rx="168" ry="20" fill="#7a3f12" opacity=".12"/>
+    <path d="M88 300 C88 382 160 414 256 414 C352 414 424 382 424 300 Z" fill="url(#kruste)"/>
+    <ellipse cx="256" cy="300" rx="168" ry="32" fill="#f6dcaa"/>
+    <path d="M102 306 C110 236 182 186 256 186 C330 186 402 236 410 306 C360 326 152 326 102 306 Z" fill="url(#mett)"/>
+    <g fill="#a93a35" opacity=".45">
+      <circle cx="168" cy="272" r="9"/><circle cx="222" cy="236" r="8"/><circle cx="292" cy="228" r="9"/>
+      <circle cx="344" cy="262" r="8"/><circle cx="252" cy="286" r="7"/><circle cx="312" cy="292" r="7"/>
+      <circle cx="196" cy="300" r="6"/><circle cx="380" cy="296" r="6"/>
+    </g>
+    <g fill="#fffaf2" stroke="#e9dccb" stroke-width="2">
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(148 290) rotate(-20)"/>
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(200 258) rotate(18)"/>
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(258 216) rotate(-12)"/>
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(318 244) rotate(28)"/>
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(368 284) rotate(-16)"/>
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(262 262) rotate(8)"/>
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(226 300) rotate(-30)"/>
+      <rect x="-10" y="-7" width="20" height="14" rx="4" transform="translate(334 302) rotate(12)"/>
+    </g>
+  </g>
+</svg>
