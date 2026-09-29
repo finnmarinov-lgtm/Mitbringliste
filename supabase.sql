@@ -58,15 +58,18 @@ $$;
 -- Wer ist das? 'admin' (Admin-Code), 'mod' ("Personen-ID:PIN" eines Moderators) oder 'klasse' (Klassencode)
 create or replace function mb_rolle(p_gruppe text, p_code text) returns text
 language plpgsql as $$
-declare g mb_gruppe;
+declare g mb_gruppe; v_id uuid;
 begin
   select * into g from mb_gruppe where id = p_gruppe;
   if not found then raise exception 'keine_gruppe'; end if;
   if mb_hash(p_gruppe, p_code) = g.admin_hash then return 'admin'; end if;
-  if p_code ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:.' and exists (
-       select 1 from mb_person where gruppe = p_gruppe and id = split_part(p_code, ':', 1)::uuid
-         and mod_hash = mb_hash(p_gruppe, p_code)) then
-    return 'mod';
+  -- erst die Form prüfen, dann umwandeln (sonst bricht ein normaler Klassencode ab)
+  if p_code ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:.' then
+    v_id := split_part(p_code, ':', 1)::uuid;
+    if exists (select 1 from mb_person where gruppe = p_gruppe and id = v_id
+               and mod_hash = mb_hash(p_gruppe, p_code)) then
+      return 'mod';
+    end if;
   end if;
   if p_code = g.code then return 'klasse'; end if;
   perform pg_sleep(0.4);
